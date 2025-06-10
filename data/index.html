@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vulnérabilités CISA Exploitées Connues</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <link rel="icon" href="favicon_io/favicon.ico" sizes="any">
+    <link rel="icon" href="favicon_io/favicon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="favicon_io/favicon.png""> <link rel=" manifest"
+        href="favicon_io/site.webmanifest">
+    <style>
+        /* Styles personnalisés pour une meilleure lisibilité */
+        .card-shadow {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+        }
+
+        .text-truncate {
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            /* Limite à 3 lignes */
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 font-sans leading-normal tracking-normal">
+
+    <div id="app" class="container mx-auto p-4">
+        <h1 class="text-4xl font-bold text-center text-gray-800 mb-8">
+            {{ catalogData.title || 'Chargement du catalogue des vulnérabilités...' }}
+        </h1>
+        <p v-if="catalogData.title" class="text-center text-gray-600 mb-6">
+            Version du catalogue : <span class="font-semibold">{{ catalogData.catalogVersion }}</span> |
+            Date de publication : <span class="font-semibold">{{ new
+                Date(catalogData.dateReleased).toLocaleDateString('fr-FR') }}</span> |
+            Total des vulnérabilités : <span class="font-semibold">{{ catalogData.count }}</span>
+        </p>
+
+        <div
+            class="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white p-4 rounded-lg card-shadow space-y-4 sm:space-y-0 sm:space-x-4">
+            <input type="text" v-model="searchText" @input="applyFilters"
+                placeholder="Rechercher par CVE ID, fournisseur, produit..."
+                class="flex-grow p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <div class="flex items-center">
+                <input type="checkbox" id="filterRansomware" v-model="filterRansomware" @change="applyFilters"
+                    class="mr-2 h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                <label for="filterRansomware" class="text-gray-700 font-medium">Afficher uniquement les ransomwares
+                    connus</label>
+            </div>
+            <div class="flex items-center space-x-2">
+                <button @click="prevPage" :disabled="currentPage === 1"
+                    class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition duration-300 ease-in-out">
+                    Précédent
+                </button>
+                <span class="text-gray-700">Page {{ currentPage }} sur {{ totalPages }}</span>
+                <button @click="nextPage" :disabled="currentPage === totalPages"
+                    class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition duration-300 ease-in-out">
+                    Suivant
+                </button>
+            </div>
+        </div>
+
+        <div v-if="loading" class="text-center text-gray-700 text-lg">Chargement des données...</div>
+        <div v-else-if="error" class="text-center text-red-600 text-lg">
+            Erreur lors du chargement des données : {{ error.message }}
+            <br>
+            Veuillez vous assurer que le fichier `known_exploited_vulnerabilities.json` se trouve dans le même
+            répertoire que ce fichier HTML.
+        </div>
+        <div v-else-if="filteredVulnerabilities.length === 0" class="text-center text-gray-600 text-lg">
+            Aucune vulnérabilité trouvée pour votre recherche ou filtre.
+        </div>
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div v-for="vuln in paginatedVulnerabilities" :key="vuln.cveID"
+                class="bg-white p-6 rounded-lg card-shadow hover:shadow-lg transition duration-300 ease-in-out">
+                <h2 class="text-xl font-semibold text-gray-800 mb-2">{{ vuln.cveID }}</h2>
+                <p class="text-gray-600 mb-1">
+                    <strong class="text-gray-700">Fournisseur :</strong> {{ vuln.vendorProject }}
+                </p>
+                <p class="text-gray-600 mb-1">
+                    <strong class="text-gray-700">Produit :</strong> {{ vuln.product }}
+                </p>
+                <p class="text-gray-600 mb-1">
+                    <strong class="text-gray-700">Nom de la vulnérabilité :</strong> {{ vuln.vulnerabilityName }}
+                </p>
+                <p class="text-gray-600 mb-1">
+                    <strong class="text-gray-700">Date d'ajout CISA :</strong> {{ new
+                    Date(vuln.dateAdded).toLocaleDateString('fr-FR') }}
+                </p>
+                <p class="text-gray-600 mb-1">
+                    <strong class="text-gray-700">Date d'échéance :</strong> {{ new
+                    Date(vuln.dueDate).toLocaleDateString('fr-FR') }}
+                </p>
+                <p class="text-gray-600 mb-4 text-truncate">
+                    <strong class="text-gray-700">Description :</strong> {{ vuln.shortDescription }}
+                </p>
+                <div class="flex flex-wrap items-center gap-2 mb-4">
+                    <span v-if="vuln.knownRansomwareCampaignUse === 'Known'"
+                        class="bg-red-200 text-red-800 text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                        title="Cette vulnérabilité est connue pour être utilisée dans des campagnes de ransomware.">
+                        Ransomware Connu
+                    </span>
+                    <span v-for="cwe in vuln.cwes" :key="cwe"
+                        class="bg-purple-200 text-purple-800 text-xs font-semibold px-2.5 py-0.5 rounded-full">
+                        {{ cwe }}
+                    </span>
+                </div>
+                <a :href="`https://nvd.nist.gov/vuln/detail/${vuln.cveID}`" target="_blank" rel="noopener noreferrer"
+                    class="inline-block bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition duration-300 ease-in-out text-sm">
+                    Détails NVD
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const app = Vue.createApp({
+            data() {
+                return {
+                    catalogData: {},
+                    vulnerabilities: [],
+                    filteredVulnerabilities: [],
+                    loading: true,
+                    error: null,
+                    searchText: '',
+                    filterRansomware: false,
+                    currentPage: 1,
+                    itemsPerPage: 9
+                };
+            },
+            computed: {
+                totalPages() {
+                    return Math.ceil(this.filteredVulnerabilities.length / this.itemsPerPage);
+                },
+                paginatedVulnerabilities() {
+                    const start = (this.currentPage - 1) * this.itemsPerPage;
+                    const end = start + this.itemsPerPage;
+                    return this.filteredVulnerabilities.slice(start, end);
+                }
+            },
+            methods: {
+                async fetchVulnerabilities() {
+                    try {
+                        const response = await fetch('./known_exploited_vulnerabilities.json');
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status} - Le fichier JSON n'a pas pu être chargé.`);
+                        }
+                        const data = await response.json();
+                        this.catalogData = {
+                            title: data.title,
+                            catalogVersion: data.catalogVersion,
+                            dateReleased: data.dateReleased,
+                            count: data.count
+                        };
+                        this.vulnerabilities = data.vulnerabilities;
+                        this.applyFilters();
+                    } catch (e) {
+                        this.error = e;
+                        console.error("Erreur de chargement des vulnérabilités:", e);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                applyFilters() {
+                    this.currentPage = 1;
+                    let tempVulnerabilities = this.vulnerabilities;
+
+                    // Appliquer le filtre de texte
+                    if (this.searchText) {
+                        const lowerCaseSearchText = this.searchText.toLowerCase();
+                        tempVulnerabilities = tempVulnerabilities.filter(vuln =>
+                            vuln.cveID.toLowerCase().includes(lowerCaseSearchText) ||
+                            vuln.vendorProject.toLowerCase().includes(lowerCaseSearchText) ||
+                            vuln.product.toLowerCase().includes(lowerCaseSearchText) ||
+                            vuln.vulnerabilityName.toLowerCase().includes(lowerCaseSearchText) ||
+                            vuln.shortDescription.toLowerCase().includes(lowerCaseSearchText)
+                        );
+                    }
+
+                    // Appliquer le filtre ransomware
+                    if (this.filterRansomware) {
+                        tempVulnerabilities = tempVulnerabilities.filter(vuln =>
+                            vuln.knownRansomwareCampaignUse === 'Known'
+                        );
+                    }
+
+                    this.filteredVulnerabilities = tempVulnerabilities;
+                },
+                nextPage() {
+                    if (this.currentPage < this.totalPages) {
+                        this.currentPage++;
+                    }
+                },
+                prevPage() {
+                    if (this.currentPage > 1) {
+                        this.currentPage--;
+                    }
+                }
+            },
+            mounted() {
+                this.fetchVulnerabilities();
+            }
+        });
+
+        app.mount('#app');
+    </script>
+</body>
+
+</html>
