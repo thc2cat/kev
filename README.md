@@ -39,4 +39,4 @@ then you cat serve data/ in any webserver as static content
 
 ## Screenshot
 
-![screenshot](doc/screenshot.134.jpg "ScreenShot)
+![screenshot](https://github.com/thc2cat/kev/blob/main/doc/screenshot.134.jpg)
